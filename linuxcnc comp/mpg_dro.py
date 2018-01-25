@@ -18,7 +18,7 @@ class MpgDro:
         signal.signal(signal.SIGINT, self.signal_handler)
 
         self.ser = Serial()
-        self.ser.baudrate = 1000000
+        self.ser.baudrate = 57600
         self.ser.port = "/dev/ttyACM0"
 
         try:
