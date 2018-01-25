@@ -1,12 +1,22 @@
+#include <ArduinoJson.h>
+
 #define ENCODER_OPTIMIZE_INTERRUPTS
 
 #include <Encoder.h>
 #include <LedControl.h>
+#include <FastCRC.h>
+
+FastCRC8 CRC8;
 
 Encoder knob(0, 1);
 
 LedControl lc = LedControl(12, 11, 10, 3);
 
+StaticJsonBuffer<200> feedJsonBuffer;
+StaticJsonBuffer<200> stepJsonBuffer;
+
+JsonObject& feedRoot = feedJsonBuffer.createObject();
+JsonObject& stepRoot = stepJsonBuffer.createObject();
 
 // Pot Stuff
 const int num_readings = 10;
@@ -65,6 +75,13 @@ void draw();
 
 void setup() {
 
+  feedRoot["val"] = 0;
+  
+  stepRoot["dist"] = 1;
+  stepRoot["axis"] = "X";
+  stepRoot["dir"] = 0;
+
+
   // initialize all the readings to 0:
   for (int this_reading = 0; this_reading < num_readings; this_reading++) {
     readings[this_reading] = 0;
@@ -76,7 +93,7 @@ void setup() {
   pinMode(step_2, INPUT);
 
   // initialize serial:
-  Serial.begin(1000000);
+  Serial.begin(57600);
 
   // reserve 200 bytes for the inputString:
   inputString.reserve(200);
@@ -114,11 +131,11 @@ void setup() {
 
 void loop() {
   readPot();
-  
+
   readKnob();
-  
+
   getSerialData();
-  
+
   if (stringComplete) {
     draw();
     inputString = "";
@@ -188,18 +205,23 @@ void readKnob() {
 
   if (new_pos != knob_position) {
     steps += 1;
-    // Serial.print("Steps = ");
-    // Serial.println(steps);
     if (steps == 4) {
-      Serial.print("STEP");
-      Serial.print(axis_val);
-      Serial.print(step_val);
+
+      stepRoot["axis"] = axis_val;
+      stepRoot["dist"] = step_val;
+
       if (new_pos > knob_position) {
-        Serial.println(0);
+        stepRoot["dir"] = 0;
       }
       else {
-        Serial.println(1);
+        stepRoot["dir"] = 1;
       }
+
+      Serial.write(0x02);
+      stepRoot.printTo(Serial);
+      // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
+      Serial.write(0x03);
+
       steps = 0;
     }
     knob_position = new_pos;
@@ -207,18 +229,18 @@ void readKnob() {
 }
 
 void readPot() {
-  
+
   // subtract the last reading:
   total = total - readings[read_index];
 
-  
+
   // read from the sensor:
   readings[read_index] = map(analogRead(pot_pin), 0, 1023, 0, 120);
 
-  
+
   // add the reading to the total:
   total = total + readings[read_index];
-  
+
   // advance to the next position in the array:
   read_index = read_index + 1;
 
@@ -233,12 +255,15 @@ void readPot() {
 
   if (prev_feed != feed) {
     prev_feed = feed;
-    // send it to the computer as ASCII digits
-    Serial.print("FEED");
-    Serial.println(feed);
-    //delay(1);        // delay in between reads for stability
+
+    feedRoot["feed"] = feed;
+
+    Serial.write(0x02);
+    feedRoot.printTo(Serial);
+    // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
+    Serial.write(0x03);
   }
-  
+
 }
 
 void getSerialData() {
@@ -252,3 +277,4 @@ void getSerialData() {
     }
   }
 }
+
