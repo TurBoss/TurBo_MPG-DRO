@@ -11,6 +11,7 @@ import time
 import json
 
 from serial import Serial, SerialException
+from copy import copy
 
 
 class MpgDro:
@@ -45,6 +46,24 @@ class MpgDro:
         self.velocity = [0.0, 0.0, 0.0]
 
         self.feed = 100
+
+        self.data = dict()
+        self.previous_data = {
+            "DRO": {
+                "X": {
+                    "pos": 0,
+                    "vel": 0
+                },
+                "Y": {
+                    "pos": 0,
+                    "vel": 0
+                },
+                "Z": {
+                    "pos": 0,
+                    "vel": 0
+                }
+            }
+        }
 
     def main(self):
 
@@ -141,6 +160,8 @@ class MpgDro:
                 self.s.joint[2]["velocity"]
             ]
 
+
+            """
             data = "{0:+07.2f}{1:+07.2f}{2:+07.2f}{3:+07.2f}{4:+07.2f}{5:+07.2f}\n" \
                 .format(self.position[2],
                         self.position[1],
@@ -150,8 +171,36 @@ class MpgDro:
                         self.velocity[0]) \
                 .replace(".", "") \
                 .replace("+", " ")
-
             self.ser.write(data)
+            
+            """
+
+            self.data = {
+                "DRO": {
+                    "X": {
+                        "pos": "{0:+07.2f}".format(self.position[0]),
+                        "vel": "{0:+07.2f}".format(self.velocity[0])
+                    },
+                    "Y": {
+                        "pos": "{0:+07.2f}".format(self.position[1]),
+                        "vel": "{0:+07.2f}".format(self.velocity[1])
+                    },
+                    "Z": {
+                        "pos": "{0:+07.2f}".format(self.position[2]),
+                        "vel": "{0:+07.2f}".format(self.velocity[2])
+                    }
+                }
+            }
+
+            update = False
+
+            for x in ["X", "Y", "Z"]:
+                if self.data.get("DRO").get(x).get("pos") != self.previous_data.get("DRO").get(x).get("pos"):
+                    self.previous_data = copy(self.data)
+                    update = True
+
+            if update:
+                self.ser.write(self.data)
 
 
 def main():
