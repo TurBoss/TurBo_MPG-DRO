@@ -178,16 +178,16 @@ class MpgDro:
             self.data = {
                 "DRO": {
                     "X": {
-                        "pos": "{0:+07.2f}".format(self.position[0]),
-                        "vel": "{0:+07.2f}".format(self.velocity[0])
+                        "pos": "{0:+07.2f}".format(self.position[0]).replace(".", ""),
+                        "vel": "{0:+07.2f}".format(self.velocity[0]).replace(".", "")
                     },
                     "Y": {
-                        "pos": "{0:+07.2f}".format(self.position[1]),
-                        "vel": "{0:+07.2f}".format(self.velocity[1])
+                        "pos": "{0:+07.2f}".format(self.position[1]).replace(".", ""),
+                        "vel": "{0:+07.2f}".format(self.velocity[1]).replace(".", "")
                     },
                     "Z": {
-                        "pos": "{0:+07.2f}".format(self.position[2]),
-                        "vel": "{0:+07.2f}".format(self.velocity[2])
+                        "pos": "{0:+07.2f}".format(self.position[2]).replace(".", ""),
+                        "vel": "{0:+07.2f}".format(self.velocity[2]).replace(".", "")
                     }
                 }
             }
@@ -200,7 +200,9 @@ class MpgDro:
                     update = True
 
             if update:
-                self.ser.write(self.data)
+                print(self.data)
+                self.ser.write(json.dumps(self.data))
+
 
 
 def main():

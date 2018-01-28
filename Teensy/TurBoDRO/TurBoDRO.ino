@@ -14,15 +14,17 @@ LedControl lc = LedControl(12, 11, 10, 3);
 
 StaticJsonBuffer<200> feedJsonBuffer;
 StaticJsonBuffer<200> stepJsonBuffer;
+StaticJsonBuffer<500> droJsonBuffer;
 
 JsonObject& feedRoot = feedJsonBuffer.createObject();
 JsonObject& stepRoot = stepJsonBuffer.createObject();
 
 JsonObject& stepData = stepRoot.createNestedObject("step");
 
+
 // Pot Stuff
-long potPreviousMillis = 0;
-long potInterval = 10;
+unsigned long potPreviousMillis = 0;
+unsigned long potInterval = 10;
 
 const int num_readings = 10;
 
@@ -49,8 +51,7 @@ int step_2 = 21;
 int axis_1 = 22;
 int axis_2 = 23;
 
-String inputString = "";         // a string to hold incoming data
-boolean stringComplete = false;  // whether the string is complete
+boolean jsonReceived = false;
 
 int x_velocity = 0;
 int y_velocity = 0;
@@ -98,9 +99,6 @@ void setup() {
   // initialize serial:
   Serial.begin(57600);
 
-  // reserve 200 bytes for the inputString:
-  inputString.reserve(200);
-
   int devices = lc.getDeviceCount();
 
   for (int address = 0; address < devices; address++) {  // we have to init all devices in a loop
@@ -134,60 +132,55 @@ void setup() {
 
 void loop() {
   readPot();
-
   readKnob();
-
   getSerialData();
-
-  if (stringComplete) {
-    draw();
-    inputString = "";
-    stringComplete = false;
-  }
 }
 
 
-void draw() {
-  // print the string when a newline arrives:
+void draw(JsonObject& droRoot) {
 
-  x_velocity = inputString.substring(18, 24).toInt();
-  y_velocity = inputString.substring(24, 30).toInt();
-  z_velocity = inputString.substring(30, 36).toInt();
+  int x_velocity = droRoot["DRO"]["X"]["vel"];
+  int y_velocity = droRoot["DRO"]["Y"]["vel"];
+  int z_velocity = droRoot["DRO"]["Z"]["vel"];
 
-  x_leds = map(x_velocity, -4500, 4500, 0, 11);
-  y_leds = map(y_velocity, -4500, 4500, 0, 11);
-  z_leds = map(z_velocity, -4500, 4500, 0, 11);
+  x_leds = map(x_velocity, -2500, 2500, 0, 10);
+  y_leds = map(y_velocity, -2500, 2500, 0, 10);
+  z_leds = map(z_velocity, -2500, 2500, 0, 10);
 
-  lc.setRow(0, 7, bar[x_leds][0]);
-  lc.setRow(0, 6, bar[x_leds][1]);
+  lc.setRow(2, 7, bar[x_leds][0]);
+  lc.setRow(2, 6, bar[x_leds][1]);
 
   lc.setRow(1, 7, bar[y_leds][0]);
   lc.setRow(1, 6, bar[y_leds][1]);
 
-  lc.setRow(2, 7, bar[z_leds][0]);
-  lc.setRow(2, 6, bar[z_leds][1]);
+  lc.setRow(0, 7, bar[z_leds][0]);
+  lc.setRow(0, 6, bar[z_leds][1]);
 
-  lc.setChar(0, 0, inputString[0], false);
-  lc.setChar(0, 1, inputString[1], false);
-  lc.setChar(0, 2, inputString[2], false);
-  lc.setChar(0, 3, inputString[3], true);
-  lc.setChar(0, 4, inputString[4], false);
-  lc.setChar(0, 5, inputString[5], false);
 
-  lc.setChar(1, 0, inputString[6], false);
-  lc.setChar(1, 1, inputString[7], false);
-  lc.setChar(1, 2, inputString[8], false);
-  lc.setChar(1, 3, inputString[9], true);
-  lc.setChar(1, 4, inputString[10], false);
-  lc.setChar(1, 5, inputString[11], false);
+  String x_axis = droRoot["DRO"]["X"]["pos"];
+  String y_axis = droRoot["DRO"]["Y"]["pos"];
+  String z_axis = droRoot["DRO"]["Z"]["pos"];
 
-  lc.setChar(2, 0, inputString[12], false);
-  lc.setChar(2, 1, inputString[13], false);
-  lc.setChar(2, 2, inputString[14], false);
-  lc.setChar(2, 3, inputString[15], true);
-  lc.setChar(2, 4, inputString[16], false);
-  lc.setChar(2, 5, inputString[17], false);
+  lc.setChar(2, 0, x_axis[0], false);
+  lc.setChar(2, 1, x_axis[1], false);
+  lc.setChar(2, 2, x_axis[2], false);
+  lc.setChar(2, 3, x_axis[3], true);
+  lc.setChar(2, 4, x_axis[4], false);
+  lc.setChar(2, 5, x_axis[5], false);
 
+  lc.setChar(1, 0, y_axis[0], false);
+  lc.setChar(1, 1, y_axis[1], false);
+  lc.setChar(1, 2, y_axis[2], false);
+  lc.setChar(1, 3, y_axis[3], true);
+  lc.setChar(1, 4, y_axis[4], false);
+  lc.setChar(1, 5, y_axis[5], false);
+
+  lc.setChar(0, 0, z_axis[0], false);
+  lc.setChar(0, 1, z_axis[1], false);
+  lc.setChar(0, 2, z_axis[2], false);
+  lc.setChar(0, 3, z_axis[3], true);
+  lc.setChar(0, 4, z_axis[4], false);
+  lc.setChar(0, 5, z_axis[5], false);
 }
 
 
@@ -279,12 +272,11 @@ void readPot() {
 
 void getSerialData() {
   while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      stringComplete = true;
-    }
-    else {
-      inputString += inChar;
+    JsonObject& droRoot = droJsonBuffer.parseObject(Serial);
+    if (droRoot.success()) {
+      //droRoot.printTo(Serial);
+      draw(droRoot);
+      droJsonBuffer.clear();
     }
   }
 }
