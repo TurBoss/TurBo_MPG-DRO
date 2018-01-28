@@ -61,3 +61,4 @@ linuxcnc comp/\.idea/
 linuxcnc comp/venv/
 
 \.idea/
+venv/
