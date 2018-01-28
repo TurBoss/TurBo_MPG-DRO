@@ -18,7 +18,12 @@ StaticJsonBuffer<200> stepJsonBuffer;
 JsonObject& feedRoot = feedJsonBuffer.createObject();
 JsonObject& stepRoot = stepJsonBuffer.createObject();
 
+JsonObject& stepData = stepRoot.createNestedObject("step");
+
 // Pot Stuff
+long potPreviousMillis = 0;
+long potInterval = 10;
+
 const int num_readings = 10;
 
 int readings[num_readings];      // the readings from the analog input
@@ -38,11 +43,11 @@ long knob_position  = 0;
 
 // Switch
 
-int axis_1 = 20;
-int axis_2 = 21;
+int step_1 = 20;
+int step_2 = 21;
 
-int step_1 = 22;
-int step_2 = 23;
+int axis_1 = 22;
+int axis_2 = 23;
 
 String inputString = "";         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
@@ -75,11 +80,9 @@ void draw();
 
 void setup() {
 
-  feedRoot["val"] = 0;
-  
-  stepRoot["dist"] = 1;
-  stepRoot["axis"] = "X";
-  stepRoot["dir"] = 0;
+  feedRoot["feed"] = 0;
+
+  stepRoot["step"];
 
 
   // initialize all the readings to 0:
@@ -207,14 +210,14 @@ void readKnob() {
     steps += 1;
     if (steps == 4) {
 
-      stepRoot["axis"] = axis_val;
-      stepRoot["dist"] = step_val;
+      stepData["axis"] = axis_val;
+      stepData["dist"] = step_val;
 
       if (new_pos > knob_position) {
-        stepRoot["dir"] = 0;
+        stepData["dir"] = 0;
       }
       else {
-        stepRoot["dir"] = 1;
+        stepData["dir"] = 1;
       }
 
       Serial.write(0x02);
@@ -230,40 +233,48 @@ void readKnob() {
 
 void readPot() {
 
-  // subtract the last reading:
-  total = total - readings[read_index];
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - potPreviousMillis > potInterval) {
+    // save the last time you blinked the LED
+    potPreviousMillis = currentMillis;
 
 
-  // read from the sensor:
-  readings[read_index] = map(analogRead(pot_pin), 0, 1023, 0, 120);
+
+    // subtract the last reading:
+    total = total - readings[read_index];
 
 
-  // add the reading to the total:
-  total = total + readings[read_index];
+    // read from the sensor:
+    readings[read_index] = map(analogRead(pot_pin), 0, 1024, 0, 121);
 
-  // advance to the next position in the array:
-  read_index = read_index + 1;
 
-  // if we're at the end of the array...
-  if (read_index >= num_readings) {
-    // ...wrap around to the beginning:
-    read_index = 0;
+    // add the reading to the total:
+    total = total + readings[read_index];
+
+    // advance to the next position in the array:
+    read_index = read_index + 1;
+
+    // if we're at the end of the array...
+    if (read_index >= num_readings) {
+      // ...wrap around to the beginning:
+      read_index = 0;
+    }
+
+    // calculate the average:
+    feed = total / num_readings;
+
+    if (prev_feed != feed) {
+      prev_feed = feed;
+
+      feedRoot["feed"] = feed;
+
+      Serial.write(0x02);
+      feedRoot.printTo(Serial);
+      // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
+      Serial.write(0x03);
+    }
   }
-
-  // calculate the average:
-  feed = total / num_readings;
-
-  if (prev_feed != feed) {
-    prev_feed = feed;
-
-    feedRoot["feed"] = feed;
-
-    Serial.write(0x02);
-    feedRoot.printTo(Serial);
-    // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
-    Serial.write(0x03);
-  }
-
 }
 
 void getSerialData() {

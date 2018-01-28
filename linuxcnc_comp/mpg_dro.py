@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import division
+
 import hal
 import sys
 import signal
 import linuxcnc
 import time
+import json
 
 from serial import Serial, SerialException
 
@@ -31,7 +34,7 @@ class MpgDro:
 
         self.current_millis = time.time() * 1000
         self.previous_millis = 0
-        self.interval = 50
+        self.interval = 10
 
         self.c = linuxcnc.command()
         self.s = linuxcnc.stat()
@@ -46,9 +49,8 @@ class MpgDro:
     def main(self):
 
         while self.running:
-
             self.read_data()
-            # self.send_data()
+            self.send_data()
 
         self.ser.close()
 
@@ -60,60 +62,63 @@ class MpgDro:
 
         while self.ser.inWaiting():
 
-            in_data = self.ser.read()
-            print(in_data)
+            byte_list = list()
 
-            if in_data == b'2':
-                print("start of msg")
-            elif in_data == b'3':
-                print("end of msg")
-            """
-            msg_type = in_data[0:4]
-            msg = in_data[4::]
+            in_byte = self.ser.read()
 
-            if msg_type == "FEED":
-                print("FEED")
+            if in_byte == '\x02':
+                while in_byte != '\x03':
+                    in_byte = self.ser.read()
+                    if in_byte != '\x03':
+                        byte_list.append(in_byte)
 
-            elif msg_type == "STEP":
-                # print("STEP")
+                json_string = ''.join(byte_list)
+                in_data = json.loads(json_string)
 
-                # print(msg)
+                for k, v in in_data.items():
+                    if k == "feed":
+                        self.c.feedrate(v / 100)
+                    elif k == "step":
 
-                axis_val = 0
-                step_val = 0
-                step_dir_val = 0
+                        if not self.s.estop and \
+                                self.s.enabled and \
+                                self.s.homed[0] and \
+                                self.s.homed[1] and \
+                                self.s.homed[2]:
 
-                step_data = msg[0]
-                axis_data = msg[1]
-                dir_data = msg[2]
+                            axis_val = 0
+                            dir_val = 0
 
-                if step_data == '1':
-                    if dir_data == '1':
-                        step_val = 1.0
-                    elif dir_data == '0':
-                        step_val = -1.0
-                elif step_data == '0':
-                    if dir_data == '1':
-                        step_val = 0.5
-                    elif dir_data == '0':
-                        step_val = -0.5
-                elif step_data == '2':
-                    if dir_data == '1':
-                        step_val = 0.1
-                    elif dir_data == '0':
-                        step_val = -0.1
+                            dist_data = v["dist"]
+                            axis_data = v["axis"]
+                            dir_data = v["dir"]
 
-                if axis_data == '1':
-                    axis_val = 0
-                elif axis_data == '0':
-                    axis_val = 1
-                elif axis_data == '2':
-                    axis_val = 2
+                            if dist_data == 1:
+                                if dir_data == 1:
+                                    dir_val = 1.0
+                                elif dir_data == 0:
+                                    dir_val = -1.0
 
-                # print(axis_val, step_val)
+                            elif dist_data == 0:
+                                if dir_data == 1:
+                                    dir_val = 0.5
+                                elif dir_data == 0:
+                                    dir_val = -0.5
 
-                self.c.jog(linuxcnc.JOG_INCREMENT, False, axis_val, 100, step_val)
-            """
+                            elif dist_data == 2:
+                                if dir_data == 1:
+                                    dir_val = 0.1
+                                elif dir_data == 0:
+                                    dir_val = -0.1
+
+                            if axis_data == 1:
+                                axis_val = 0
+                            elif axis_data == 0:
+                                axis_val = 1
+                            elif axis_data == 2:
+                                axis_val = 2
+
+                            self.c.jog(linuxcnc.JOG_INCREMENT, False, axis_val, 100, dir_val)
 
     def send_data(self):
 
