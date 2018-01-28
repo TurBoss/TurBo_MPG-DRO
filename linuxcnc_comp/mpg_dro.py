@@ -60,8 +60,14 @@ class MpgDro:
 
         while self.ser.inWaiting():
 
-            in_data = self.ser.readline()
+            in_data = self.ser.read()
+            print(in_data)
 
+            if in_data == b'2':
+                print("start of msg")
+            elif in_data == b'3':
+                print("end of msg")
+            """
             msg_type = in_data[0:4]
             msg = in_data[4::]
 
@@ -107,6 +113,7 @@ class MpgDro:
                 # print(axis_val, step_val)
 
                 self.c.jog(linuxcnc.JOG_INCREMENT, False, axis_val, 100, step_val)
+            """
 
     def send_data(self):
 
