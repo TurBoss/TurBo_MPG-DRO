@@ -22,7 +22,7 @@ class MpgDro:
         signal.signal(signal.SIGINT, self.signal_handler)
 
         self.ser = Serial()
-        self.ser.baudrate = 57600
+        self.ser.baudrate = 115200
         self.ser.port = "/dev/ttyACM0"
 
         try:
@@ -68,76 +68,12 @@ class MpgDro:
     def main(self):
 
         while self.running:
-            self.read_data()
             self.send_data()
 
         self.ser.close()
 
     def signal_handler(self, signal, frame):
-
         self.running = False
-
-    def read_data(self):
-
-        while self.ser.inWaiting():
-
-            byte_list = list()
-
-            in_byte = self.ser.read()
-
-            if in_byte == '\x02':
-                while in_byte != '\x03':
-                    in_byte = self.ser.read()
-                    if in_byte != '\x03':
-                        byte_list.append(in_byte)
-
-                json_string = ''.join(byte_list)
-                in_data = json.loads(json_string)
-
-                for k, v in in_data.items():
-                    if k == "feed":
-                        self.c.feedrate(v / 100)
-                    elif k == "step":
-
-                        if not self.s.estop and \
-                                self.s.enabled and \
-                                self.s.homed[0] and \
-                                self.s.homed[1] and \
-                                self.s.homed[2]:
-
-                            axis_val = 0
-                            dir_val = 0
-
-                            dist_data = v["dist"]
-                            axis_data = v["axis"]
-                            dir_data = v["dir"]
-
-                            if dist_data == 1:
-                                if dir_data == 1:
-                                    dir_val = 1.0
-                                elif dir_data == 0:
-                                    dir_val = -1.0
-
-                            elif dist_data == 0:
-                                if dir_data == 1:
-                                    dir_val = 0.5
-                                elif dir_data == 0:
-                                    dir_val = -0.5
-
-                            elif dist_data == 2:
-                                if dir_data == 1:
-                                    dir_val = 0.1
-                                elif dir_data == 0:
-                                    dir_val = -0.1
-
-                            if axis_data == 1:
-                                axis_val = 0
-                            elif axis_data == 0:
-                                axis_val = 1
-                            elif axis_data == 2:
-                                axis_val = 2
-
-                            self.c.jog(linuxcnc.JOG_INCREMENT, False, axis_val, 100, dir_val)
 
     def send_data(self):
 
@@ -159,21 +95,6 @@ class MpgDro:
                 self.s.joint[1]["velocity"],
                 self.s.joint[2]["velocity"]
             ]
-
-
-            """
-            data = "{0:+07.2f}{1:+07.2f}{2:+07.2f}{3:+07.2f}{4:+07.2f}{5:+07.2f}\n" \
-                .format(self.position[2],
-                        self.position[1],
-                        self.position[0],
-                        self.velocity[2],
-                        self.velocity[1],
-                        self.velocity[0]) \
-                .replace(".", "") \
-                .replace("+", " ")
-            self.ser.write(data)
-            
-            """
 
             self.data = {
                 "DRO": {
@@ -200,14 +121,10 @@ class MpgDro:
                     update = True
 
             if update:
-                print(self.data)
                 self.ser.write(json.dumps(self.data))
 
 
-
 def main():
-    h = hal.component("mpg_dro")
-    h.ready()
     mpg_dro = MpgDro()
     mpg_dro.main()
 

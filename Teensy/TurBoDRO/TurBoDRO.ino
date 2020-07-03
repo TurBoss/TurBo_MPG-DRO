@@ -1,55 +1,13 @@
 #include <ArduinoJson.h>
 
-#define ENCODER_OPTIMIZE_INTERRUPTS
-
-#include <Encoder.h>
 #include <LedControl.h>
 #include <FastCRC.h>
 
 FastCRC8 CRC8;
 
-Encoder knob(0, 1);
-
 LedControl lc = LedControl(12, 11, 10, 3);
 
-StaticJsonBuffer<200> feedJsonBuffer;
-StaticJsonBuffer<200> stepJsonBuffer;
-StaticJsonBuffer<500> droJsonBuffer;
-
-JsonObject& feedRoot = feedJsonBuffer.createObject();
-JsonObject& stepRoot = stepJsonBuffer.createObject();
-
-JsonObject& stepData = stepRoot.createNestedObject("step");
-
-
-// Pot Stuff
-unsigned long potPreviousMillis = 0;
-unsigned long potInterval = 10;
-
-const int num_readings = 10;
-
-int readings[num_readings];      // the readings from the analog input
-int read_index = 0;              // the index of the current reading
-int total = 0;                  // the running total
-int average = 0;                // the average
-
-int pot_pin = A0;
-
-int prev_feed = 0;
-int feed = 0;
-
-// Encoder
-
-int steps = 0;
-long knob_position  = 0;
-
-// Switch
-
-int step_1 = 20;
-int step_2 = 21;
-
-int axis_1 = 22;
-int axis_2 = 23;
+DynamicJsonDocument dro(512);
 
 boolean jsonReceived = false;
 
@@ -75,29 +33,13 @@ byte bar[11][2] = {
   { B00000000, B10001111 }, //  0000011111
 };
 
-void readKnob();
-void getData();
+void getSerialData();
 void draw();
 
 void setup() {
 
-  feedRoot["feed"] = 0;
-
-  stepRoot["step"];
-
-
-  // initialize all the readings to 0:
-  for (int this_reading = 0; this_reading < num_readings; this_reading++) {
-    readings[this_reading] = 0;
-  }
-
-  pinMode(axis_1, INPUT);
-  pinMode(axis_2, INPUT);
-  pinMode(step_1, INPUT);
-  pinMode(step_2, INPUT);
-
   // initialize serial:
-  Serial.begin(57600);
+  Serial.begin(115200);
 
   int devices = lc.getDeviceCount();
 
@@ -131,17 +73,13 @@ void setup() {
 }
 
 void loop() {
-  readPot();
-  readKnob();
-  getSerialData();
 }
 
+void draw(DynamicJsonDocument& dro) {
 
-void draw(JsonObject& droRoot) {
-
-  int x_velocity = droRoot["DRO"]["X"]["vel"];
-  int y_velocity = droRoot["DRO"]["Y"]["vel"];
-  int z_velocity = droRoot["DRO"]["Z"]["vel"];
+  int x_velocity = dro["DRO"]["X"]["vel"];
+  int y_velocity = dro["DRO"]["Y"]["vel"];
+  int z_velocity = dro["DRO"]["Z"]["vel"];
 
   x_leds = map(x_velocity, -2500, 2500, 0, 10);
   y_leds = map(y_velocity, -2500, 2500, 0, 10);
@@ -157,9 +95,9 @@ void draw(JsonObject& droRoot) {
   lc.setRow(0, 6, bar[z_leds][1]);
 
 
-  String x_axis = droRoot["DRO"]["X"]["pos"];
-  String y_axis = droRoot["DRO"]["Y"]["pos"];
-  String z_axis = droRoot["DRO"]["Z"]["pos"];
+  String x_axis = dro["DRO"]["X"]["pos"];
+  String y_axis = dro["DRO"]["Y"]["pos"];
+  String z_axis = dro["DRO"]["Z"]["pos"];
 
   lc.setChar(2, 0, x_axis[0], false);
   lc.setChar(2, 1, x_axis[1], false);
@@ -183,101 +121,14 @@ void draw(JsonObject& droRoot) {
   lc.setChar(0, 5, z_axis[5], false);
 }
 
-
-void readKnob() {
-
-  int axis_val = 0;
-  int step_val = 0;
-
-  bitWrite(axis_val, 0, !digitalRead(axis_1));
-  bitWrite(axis_val, 1, !digitalRead(axis_2));
-
-  bitWrite(step_val, 0, !digitalRead(step_1));
-  bitWrite(step_val, 1, !digitalRead(step_2));
-
-  long new_pos;
-
-  new_pos = knob.read();
-
-  if (new_pos != knob_position) {
-    steps += 1;
-    if (steps == 4) {
-
-      stepData["axis"] = axis_val;
-      stepData["dist"] = step_val;
-
-      if (new_pos > knob_position) {
-        stepData["dir"] = 0;
-      }
-      else {
-        stepData["dir"] = 1;
-      }
-
-      Serial.write(0x02);
-      stepRoot.printTo(Serial);
-      // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
-      Serial.write(0x03);
-
-      steps = 0;
-    }
-    knob_position = new_pos;
-  }
-}
-
-void readPot() {
-
-  unsigned long currentMillis = millis();
-
-  if (currentMillis - potPreviousMillis > potInterval) {
-    // save the last time you blinked the LED
-    potPreviousMillis = currentMillis;
-
-
-
-    // subtract the last reading:
-    total = total - readings[read_index];
-
-
-    // read from the sensor:
-    readings[read_index] = map(analogRead(pot_pin), 0, 1024, 0, 121);
-
-
-    // add the reading to the total:
-    total = total + readings[read_index];
-
-    // advance to the next position in the array:
-    read_index = read_index + 1;
-
-    // if we're at the end of the array...
-    if (read_index >= num_readings) {
-      // ...wrap around to the beginning:
-      read_index = 0;
-    }
-
-    // calculate the average:
-    feed = total / num_readings;
-
-    if (prev_feed != feed) {
-      prev_feed = feed;
-
-      feedRoot["feed"] = feed;
-
-      Serial.write(0x02);
-      feedRoot.printTo(Serial);
-      // Serial.print(CRC8.smbus(output, sizeof(output)), HEX );
-      Serial.write(0x03);
-    }
-  }
-}
-
-void getSerialData() {
+void serialEvent() {
   while (Serial.available()) {
-    JsonObject& droRoot = droJsonBuffer.parseObject(Serial);
-    if (droRoot.success()) {
-      //droRoot.printTo(Serial);
-      draw(droRoot);
-      droJsonBuffer.clear();
+    DeserializationError error = deserializeJson(dro, Serial);
+    if (error) {
+      return;
     }
+    //droRoot.printTo(Serial);
+    draw(dro);
+    dro.clear();
   }
 }
-
