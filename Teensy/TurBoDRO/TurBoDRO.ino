@@ -3,38 +3,11 @@
 #include <LedControl.h>
 #include <FastCRC.h>
 
-FastCRC8 CRC8;
-
 LedControl lc = LedControl(12, 11, 10, 3);
 
 DynamicJsonDocument dro(512);
 
-boolean jsonReceived = false;
-
-int x_velocity = 0;
-int y_velocity = 0;
-int z_velocity = 0;
-
-int x_leds = 0;
-int y_leds = 0;
-int z_leds = 0;
-
-byte bar[11][2] = {
-  { B01100000, B01110000 }, //  1111100000
-  { B00100000, B01110000 }, //  0111100000
-  { B00000000, B01110000 }, //  0011100000
-  { B00000000, B00110000 }, //  0001100000
-  { B00000000, B00010000 }, //  0000100000
-  { B00000000, B00000000 }, //  0000000000
-  { B00000000, B00001000 }, //  0000010000
-  { B00000000, B00001100 }, //  0000011000
-  { B00000000, B00001110 }, //  0000011100
-  { B00000000, B00001111 }, //  0000011110
-  { B00000000, B10001111 }, //  0000011111
-};
-
-void getSerialData();
-void draw();
+void draw(DynamicJsonDocument& dro);
 
 void setup() {
 
@@ -49,54 +22,45 @@ void setup() {
     lc.clearDisplay(address);     /* and clear the display */
   }
 
-  lc.setChar(0, 0, ' ', false);
+  lc.setChar(0, 0, '0', false);
   lc.setChar(0, 1, '0', false);
   lc.setChar(0, 2, '0', false);
   lc.setChar(0, 3, '0', true);
   lc.setChar(0, 4, '0', false);
   lc.setChar(0, 5, '0', false);
 
-  lc.setChar(1, 0, ' ', false);
+  lc.setChar(1, 0, '0', false);
   lc.setChar(1, 1, '0', false);
   lc.setChar(1, 2, '0', false);
   lc.setChar(1, 3, '0', true);
   lc.setChar(1, 4, '0', false);
   lc.setChar(1, 5, '0', false);
 
-  lc.setChar(2, 0, ' ', false);
+  lc.setChar(2, 0, '0', false);
   lc.setChar(2, 1, '0', false);
   lc.setChar(2, 2, '0', false);
   lc.setChar(2, 3, '0', true);
   lc.setChar(2, 4, '0', false);
   lc.setChar(2, 5, '0', false);
-
 }
 
 void loop() {
+  while (Serial.available()) {
+    DeserializationError error = deserializeJson(dro, Serial);
+    if (error) {
+      Serial.println("Error reading JSON");
+    }
+    else {
+      draw(dro);
+      dro.clear();
+    }
+  }
 }
 
 void draw(DynamicJsonDocument& dro) {
 
-  int x_velocity = dro["DRO"]["X"]["vel"];
-  int y_velocity = dro["DRO"]["Y"]["vel"];
-  int z_velocity = dro["DRO"]["Z"]["vel"];
-
-  x_leds = map(x_velocity, -2500, 2500, 0, 10);
-  y_leds = map(y_velocity, -2500, 2500, 0, 10);
-  z_leds = map(z_velocity, -2500, 2500, 0, 10);
-
-  lc.setRow(2, 7, bar[x_leds][0]);
-  lc.setRow(2, 6, bar[x_leds][1]);
-
-  lc.setRow(1, 7, bar[y_leds][0]);
-  lc.setRow(1, 6, bar[y_leds][1]);
-
-  lc.setRow(0, 7, bar[z_leds][0]);
-  lc.setRow(0, 6, bar[z_leds][1]);
-
-
   String x_axis = dro["DRO"]["X"]["pos"];
-  String y_axis = dro["DRO"]["Y"]["pos"];
+  String y_axis  = dro["DRO"]["Y"]["pos"];
   String z_axis = dro["DRO"]["Z"]["pos"];
 
   lc.setChar(2, 0, x_axis[0], false);
@@ -119,16 +83,4 @@ void draw(DynamicJsonDocument& dro) {
   lc.setChar(0, 3, z_axis[3], true);
   lc.setChar(0, 4, z_axis[4], false);
   lc.setChar(0, 5, z_axis[5], false);
-}
-
-void serialEvent() {
-  while (Serial.available()) {
-    DeserializationError error = deserializeJson(dro, Serial);
-    if (error) {
-      return;
-    }
-    //droRoot.printTo(Serial);
-    draw(dro);
-    dro.clear();
-  }
 }
